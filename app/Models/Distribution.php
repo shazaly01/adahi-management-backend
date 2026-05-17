@@ -15,16 +15,22 @@ class Distribution extends Model
 
     protected $fillable = [
         'receipt_number',
+        'distribution_entity_id', // تمت الإضافة لمنع خطأ Mass Assignment
         'user_id',
         'beneficiary_id',
         'sacrifice_type_id',
         'payment_method',
         'actual_price',
+        'quantity',               // تمت الإضافة لدعم العدد
+        'beneficiary_image',      // تمت الإضافة لمنع خطأ Mass Assignment
+        'beneficiary_document',   // تمت الإضافة لمنع خطأ Mass Assignment
+        'notes',                  // تمت الإضافة لمنع خطأ Mass Assignment
     ];
 
     protected $casts = [
         'receipt_number' => 'string',
         'actual_price' => 'integer',
+        'quantity' => 'integer',
     ];
 
     public function user(): BelongsTo

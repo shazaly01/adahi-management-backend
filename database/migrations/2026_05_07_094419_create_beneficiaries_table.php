@@ -9,13 +9,14 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-   public function up(): void
+    public function up(): void
     {
         Schema::create('beneficiaries', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained('users')->onDelete('restrict'); // الجهة الموزعة التي يتبع لها المستفيد
             $table->string('name');
-            $table->decimal('national_id', 18, 0)->unique();
+            // التعديل هنا: جعل الرقم الوطني اختيارياً (nullable)
+            $table->decimal('national_id', 18, 0)->nullable()->unique();
             $table->string('phone');
             $table->string('job_number')->nullable();
             $table->timestamps();

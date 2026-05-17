@@ -23,11 +23,6 @@ class StoreDistributionEntityRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'id' => [
-                'required',
-                'numeric',
-                'unique:distribution_entities,id'
-            ],
             'name' => [
                 'required',
                 'string',
@@ -53,7 +48,6 @@ class StoreDistributionEntityRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'id' => 'رقم الجهة',
             'name' => 'اسم الجهة',
             'region' => 'المنطقة',
             'is_active' => 'حالة التفعيل',

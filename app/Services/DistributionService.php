@@ -56,7 +56,7 @@ class DistributionService
             // 4. تحديد الكمية (الافتراض 1)
             $quantity = isset($data['quantity']) ? (int) $data['quantity'] : 1;
 
-            // 5. إنشاء سجل التوزيع (أضفنا distribution_entity_id لضمان مرجعية البيانات)
+            // 5. إنشاء سجل التوزيع
             $distribution = Distribution::create([
                 'receipt_number'         => $receiptNumber,
                 'distribution_entity_id' => $distributionEntityId, // الجهة التي خرجت منها الأضحية
@@ -65,12 +65,13 @@ class DistributionService
                 'sacrifice_type_id'      => $data['sacrifice_type_id'],
                 'payment_method'         => $data['payment_method'],
                 'actual_price'           => $data['actual_price'],
+                'quantity'               => $quantity,             // حفظ الكمية في الداتا بيز
                 'beneficiary_image'      => $imagePath,
                 'beneficiary_document'   => $documentPath,
                 'notes'                  => $data['notes'] ?? null,
             ]);
 
-            // 6. خصم الأضحية من عهدة الجهة (تحديث الاستدعاء ليتناسب مع InventoryService الجديد)
+            // 6. خصم الأضحية من عهدة الجهة
             // الترتيب: sacrificeTypeId, quantity, reference, entityId, warehouseId, userId
             $this->inventoryService->removeStock(
                 $data['sacrifice_type_id'],
@@ -88,7 +89,7 @@ class DistributionService
                 $this->installmentService->createContract(
                     $distribution->id,
                     $data['beneficiary_id'],
-                    $data['actual_price'],
+                    $data['actual_price'], // ملاحظة: السعر الفعلي يتم تمريره للـ Service الخاصة بالأقساط كإجمالي أو قسط بناءً على اللوجيك هناك
                     $monthsCount
                 );
             }
@@ -112,7 +113,7 @@ class DistributionService
      */
     private function uploadFile(UploadedFile $file, string $path): string
     {
-        // نستخدم الطابع الزمني فقط لمنع التكرار مع بقاء الاسم الأصلي كما طلبت
+        // نستخدم الطابع الزمني فقط لمنع التكرار مع بقاء الاسم الأصلي
         $safeName = time() . '_' . $file->getClientOriginalName();
         return $file->storeAs($path, $safeName, 'public');
     }

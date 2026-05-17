@@ -11,6 +11,7 @@ class UpdateDistributionEntityRequest extends FormRequest
      */
     public function authorize(): bool
     {
+        // الصلاحيات تتم معالجتها في الـ Controller عبر الـ Policy
         return true;
     }
 
@@ -21,12 +22,8 @@ class UpdateDistributionEntityRequest extends FormRequest
      */
     public function rules(): array
     {
-        // استخراج الـ ID الخاص بالكيان من المسار (Route) لتجاهله في قاعدة فريد (unique)
-        $entityId = $this->route('distribution_entity') ? $this->route('distribution_entity')->id : null;
-
         return [
             'name' => [
-                'sometimes',
                 'required',
                 'string',
                 'max:255'

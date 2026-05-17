@@ -23,7 +23,8 @@ class StoreBeneficiaryRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'national_id' => ['required', 'numeric', 'digits_between:1,18', 'unique:beneficiaries,national_id'],
+            // التعديل هنا: تغييره إلى nullable للسماح بإدخال الجهات والمشاريع
+            'national_id' => ['nullable', 'numeric', 'digits_between:1,18', 'unique:beneficiaries,national_id'],
             'phone' => ['required', 'string', 'max:20'],
             'job_number' => ['nullable', 'string', 'max:50'],
         ];
@@ -38,10 +39,9 @@ class StoreBeneficiaryRequest extends FormRequest
     {
         return [
             'name.required' => 'اسم المستفيد مطلوب.',
-            'national_id.required' => 'الرقم الوطني مطلوب.',
             'national_id.numeric' => 'الرقم الوطني يجب أن يحتوي على أرقام فقط.',
             'national_id.digits_between' => 'الرقم الوطني لا يمكن أن يتجاوز 18 خانة.',
-            'national_id.unique' => 'هذا المستفيد مسجل في النظام مسبقاً.',
+            'national_id.unique' => 'هذا المستفيد (أو الرقم الوطني) مسجل في النظام مسبقاً.',
             'phone.required' => 'رقم هاتف المستفيد مطلوب.',
             'phone.string' => 'رقم الهاتف يجب أن يكون نصاً صالحاً.',
             'phone.max' => 'رقم الهاتف لا يمكن أن يتجاوز 20 خانة.',

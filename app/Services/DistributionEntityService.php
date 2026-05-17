@@ -16,9 +16,8 @@ class DistributionEntityService
     public function createEntity(array $data): DistributionEntity
     {
         return DB::transaction(function () use ($data) {
-            // 1. إنشاء جهة التوزيع
+            // 1. إنشاء جهة التوزيع (تمت إزالة id ليتم توليده تلقائياً)
             $entity = DistributionEntity::create([
-                'id' => $data['id'],
                 'name' => $data['name'],
                 'region' => $data['region'] ?? null,
                 'is_active' => $data['is_active'] ?? true,

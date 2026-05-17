@@ -32,7 +32,13 @@ class DistributionResource extends JsonResource
             'payment_method' => $this->payment_method,
             'actual_price' => $this->actual_price,
 
-            // إضافة مسارات المرفقات لتظهر كروابط مباشرة في الواجهة
+            // التعديل الأساسي: تمرير الكمية للواجهة الأمامية
+            'quantity' => $this->quantity,
+
+            // تمرير الملاحظات أيضاً لتظهر في تفاصيل الإيصال إذا لزم الأمر
+            'notes' => $this->notes,
+
+            // إضافة مسارات Mرفقات لتظهر كروابط مباشرة في الواجهة
             'beneficiary_image' => $this->beneficiary_image ? asset('storage/' . $this->beneficiary_image) : null,
             'beneficiary_document' => $this->beneficiary_document ? asset('storage/' . $this->beneficiary_document) : null,
 

@@ -32,9 +32,14 @@ class StoreDistributionRequest extends FormRequest
             // عدد أشهر التقسيط إلزامي فقط إذا كان نوع الدفع أقساط
             'months_count' => ['required_if:payment_method,installments', 'integer', 'min:1'],
 
-            // تم تغيير المرفقات لتكون اختيارية (nullable) بدلاً من إلزامية (required)
+            // إضافة قاعدة التحقق للكمية (اختيارية، وإذا أرسلت يجب ألا تقل عن 1)
+            'quantity' => ['nullable', 'integer', 'min:1'],
+
             'beneficiary_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg', 'max:4096'],
             'beneficiary_document' => ['nullable', 'file', 'mimes:jpeg,png,jpg,pdf', 'max:4096'],
+
+            // إضافة الملاحظات للتحقق كونها موجودة في Service
+            'notes' => ['nullable', 'string', 'max:1000'],
         ];
     }
 
@@ -70,6 +75,8 @@ class StoreDistributionRequest extends FormRequest
             'months_count.required_if' => 'عدد أشهر التقسيط مطلوب عندما تكون طريقة الدفع أقساط.',
             'months_count.integer' => 'عدد الأشهر يجب أن يكون رقماً صحيحاً.',
             'months_count.min' => 'عدد الأشهر يجب أن يكون شهراً واحداً على الأقل.',
+            'quantity.integer' => 'الكمية يجب أن تكون رقماً صحيحاً.',
+            'quantity.min' => 'يجب ألا تقل الكمية عن أضحية واحدة.',
             'beneficiary_image.image' => 'يجب أن يكون الملف المرفق صورة.',
             'beneficiary_image.mimes' => 'صيغة الصورة غير مدعومة.',
             'beneficiary_document.file' => 'يجب أن يكون المرفق ملفاً صالحاً.',
