@@ -127,4 +127,21 @@ class DistributionController extends Controller
 
         return DistributionResource::collection($distributions);
     }
+
+
+    /**
+     * استخراج الإيصالات للعامة (بدون مصادقة أو صلاحيات) عبر روابط الواتساب
+     */
+    public function publicReceipts(Request $request): AnonymousResourceCollection
+    {
+        $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'exists:distributions,id',
+        ]);
+
+        // جلب البيانات مباشرة من الـ Service دون فحص صلاحيات المستخدم لفتح الجلسة للمستفيدين
+        $distributions = $this->distributionService->getReceipts($request->ids);
+
+        return DistributionResource::collection($distributions);
+    }
 }

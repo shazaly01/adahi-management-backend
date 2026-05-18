@@ -40,6 +40,7 @@ use App\Http\Controllers\Api\StockReportController;
 
 // --- المسارات العامة (Public Routes) ---
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('distributions/receipts', [DistributionController::class, 'receipts'])->name('distributions.receipts');
 
 // --- المسارات المحمية (Protected Routes) ---
 Route::middleware('auth:sanctum')->group(function () {
@@ -82,7 +83,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- مسارات إيصالات التسليم للجهات والتوزيع للأفراد (يجب أن تسبق الـ apiResource) ---
     Route::get('allocations/{allocation}/receipt', [AllocationController::class, 'receipt'])->name('allocations.receipt');
-    Route::post('distributions/receipts', [DistributionController::class, 'receipts'])->name('distributions.receipts');
+
 
     // --- مسارات الـ Resources الأساسية للجهات والأفراد ---
     Route::apiResource('allocations', AllocationController::class)->except(['destroy']);
