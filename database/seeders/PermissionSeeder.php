@@ -59,6 +59,7 @@ class PermissionSeeder extends Seeder
 
             // التوزيع (للمستفيدين النهائيين)
             'distribution.view', 'distribution.create', 'distribution.update', 'distribution.delete',
+            'distribution.deliver', // تمت إضافة صلاحية شاشة التأكيد والتسليم
 
             // الأقساط
             'installment.view', 'installment.collect',
@@ -105,6 +106,7 @@ class PermissionSeeder extends Seeder
             'dashboard.view',
             'beneficiary.view', 'beneficiary.create',
             'distribution.view', 'distribution.create',
+            'distribution.deliver', // تم منح الصلاحية لدور الموزع ليتمكن من رؤية شاشة التسليم وتأكيدها
             'installment.view', 'installment.collect',
         ]);
     }

@@ -17,8 +17,6 @@ class DistributionPolicy
 
     public function view(User $user, Distribution $distribution): bool
     {
-        // يمكن للموزع رؤية توزيعاته فقط، أو يمكن للمدير رؤية الكل
-        // تم تبسيطها هنا بناءً على الصلاحية العامة
         return $user->hasPermissionTo('distribution.view');
     }
 
@@ -45,5 +43,11 @@ class DistributionPolicy
     public function forceDelete(User $user, Distribution $distribution): bool
     {
         return $user->hasPermissionTo('distribution.delete');
+    }
+
+    // تمت إضافة الدالة الجديدة للتحقق من صلاحية الدخول لشاشة التسليم وتأكيدها
+    public function deliver(User $user): bool
+    {
+        return $user->hasPermissionTo('distribution.deliver');
     }
 }

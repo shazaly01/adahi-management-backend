@@ -41,6 +41,7 @@ class StoreDistributionRequest extends FormRequest
             // إضافة الملاحظات للتحقق كونها موجودة في Service
             'notes' => ['nullable', 'string', 'max:1000'],
             'delivery_location' => ['nullable', 'string', 'max:255'],
+            'delivery_date' => ['required_if:is_delivered,true', 'nullable', 'date'],
         ];
     }
 

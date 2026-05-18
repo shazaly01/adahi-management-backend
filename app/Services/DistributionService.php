@@ -65,6 +65,9 @@ class DistributionService
                 'beneficiary_document'   => $documentPath,
                 'notes'                  => $data['notes'] ?? null,
                 'delivery_location'      => $data['delivery_location'] ?? null,
+                'is_delivered'           => $data['is_delivered'] ?? false,
+                'delivery_date'          => $data['delivery_date'] ?? null,
+                // الحقول الجديدة تأخذ قيمها الافتراضية من الـ Migration (false و null)
             ]);
 
             // 4. خصم الأضحية من عهدة الجهة (ينشئ حركة Out)
@@ -227,8 +230,6 @@ class DistributionService
         return $receiptNumber;
     }
 
-
-
     protected function sendDistributionSms(Distribution $distribution, string $userId): void
   {
       // التأكد من تحميل العلاقات لجلب الاسم والنوع بأمان
@@ -244,4 +245,38 @@ class DistributionService
           $this->smsService->sendIndividual($beneficiary, $content, $userId);
       }
   }
+
+    // =======================================================================
+    // الدوال الجديدة الخاصة بشاشة التسليم (تطبيقاً للهدف الجديد)
+    // =======================================================================
+
+    /**
+     * البحث عن إيصالات مستفيد محدد، مع فلترة النتائج بناءً على جهة التوزيع التابعة للمستخدم (الموزع)
+     */
+    public function searchDeliveries(string $searchTerm, string $distributionEntityId): Collection
+    {
+        return Distribution::with(['beneficiary', 'sacrificeType'])
+            ->where('distribution_entity_id', $distributionEntityId) // الفلترة بجهة الموزع
+            ->whereHas('beneficiary', function ($query) use ($searchTerm) {
+                // البحث بالاسم أو الهاتف أو الرقم الوطني
+                $query->where('name', 'like', "%{$searchTerm}%")
+                      ->orWhere('phone', 'like', "%{$searchTerm}%")
+                      ->orWhere('national_id', 'like', "%{$searchTerm}%");
+            })
+            ->orderBy('id', 'desc')
+            ->get();
+    }
+
+    /**
+     * تغيير حالة التسليم وتوثيق تاريخ التسليم إذا تم التأكيد
+     */
+    public function toggleDeliveryStatus(Distribution $distribution, bool $isDelivered): Distribution
+    {
+        $distribution->update([
+            'is_delivered' => $isDelivered,
+            'delivery_date' => $isDelivered ? now() : null, // إضافة تاريخ التسليم بناءً على الحالة
+        ]);
+
+        return $distribution;
+    }
 }

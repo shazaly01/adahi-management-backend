@@ -26,12 +26,16 @@ class Distribution extends Model
         'beneficiary_document',   // تمت الإضافة لمنع خطأ Mass Assignment
         'notes',
         'delivery_location',            // تمت الإضافة لمنع خطأ Mass Assignment
+        'is_delivered',  // تمت إضافة حقل حالة التسليم
+        'delivery_date', // تمت إضافة حقل تاريخ التسليم
     ];
 
     protected $casts = [
         'receipt_number' => 'string',
         'actual_price' => 'integer',
         'quantity' => 'integer',
+        'is_delivered' => 'boolean',   // تحويل الحقل إلى قيمة منطقية
+        'delivery_date' => 'datetime', // تحويل الحقل إلى كائن تاريخ ووقت
     ];
 
     public function user(): BelongsTo

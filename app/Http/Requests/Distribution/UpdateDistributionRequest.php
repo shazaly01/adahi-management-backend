@@ -40,6 +40,7 @@ class UpdateDistributionRequest extends FormRequest
             'beneficiary_document' => ['nullable', 'file', 'mimes:jpeg,png,jpg,pdf', 'max:4096'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'delivery_location' => ['nullable', 'string', 'max:255'],
+            'delivery_date' => ['required_if:is_delivered,true', 'nullable', 'date'],
         ];
     }
 

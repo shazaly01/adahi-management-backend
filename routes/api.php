@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\DistributionEntityController;
 use App\Http\Controllers\Api\SupplyController;
 use App\Http\Controllers\Api\AllocationController;
 use App\Http\Controllers\Api\DistributionController;
+use App\Http\Controllers\Api\DistributionDeliveryController;
 use App\Http\Controllers\Api\InventoryMovementController;
 use App\Http\Controllers\Api\EntityStockController;
 use App\Http\Controllers\Api\InstallmentContractController;
@@ -85,6 +86,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('allocations/{allocation}/receipt', [AllocationController::class, 'receipt'])->name('allocations.receipt');
 
 
+    Route::get('distributions/deliveries/search', [DistributionDeliveryController::class, 'search'])->name('distributions.deliveries.search');
+    Route::patch('distributions/deliveries/{distribution}/toggle', [DistributionDeliveryController::class, 'toggleStatus'])->name('distributions.deliveries.toggle');
     // --- مسارات الـ Resources الأساسية للجهات والأفراد ---
     Route::apiResource('allocations', AllocationController::class)->except(['destroy']);
     Route::apiResource('distributions', DistributionController::class)->except(['destroy']);
