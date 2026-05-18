@@ -9,17 +9,23 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Storage;
 use Exception;
+use App\Services\SmsService;
 
 class DistributionService
 {
     protected InventoryService $inventoryService;
     protected InstallmentService $installmentService;
+    protected SmsService $smsService;
 
-    public function __construct(InventoryService $inventoryService, InstallmentService $installmentService)
-    {
-        $this->inventoryService = $inventoryService;
-        $this->installmentService = $installmentService;
-    }
+   public function __construct(
+    InventoryService $inventoryService,
+    InstallmentService $installmentService,
+    SmsService $smsService
+) {
+    $this->inventoryService = $inventoryService;
+    $this->installmentService = $installmentService;
+    $this->smsService = $smsService;
+}
 
     /**
      * تنفيذ عملية التوزيع بالكامل (خصم من عهدة الجهة وإنشاء أقساط إن وجدت)
@@ -75,6 +81,15 @@ class DistributionService
                 $monthsCount = $data['months_count'] ?? throw new Exception("يرجى تحديد عدد أشهر التقسيط.");
                 $this->installmentService->createContract($distribution->id, $data['beneficiary_id'], $data['actual_price'], $monthsCount);
             }
+
+            DB::afterCommit(function () use ($distribution, $userId) {
+                try {
+                    $this->sendDistributionSms($distribution, $userId);
+                } catch (\Exception $e) {
+                    // تسجيل الخطأ في ملفات النظام دون تعطل واجهة المستخدم
+                    \Illuminate\Support\Facades\Log::error("فشل إطلاق رسالة الصرف للإيصال رقم {$distribution->receipt_number}: " . $e->getMessage());
+                }
+            });
 
             return $distribution;
         });
@@ -205,4 +220,22 @@ class DistributionService
         }
         return $receiptNumber;
     }
+
+
+
+    protected function sendDistributionSms(Distribution $distribution, string $userId): void
+  {
+      // التأكد من تحميل العلاقات لجلب الاسم والنوع بأمان
+      $distribution->loadMissing(['beneficiary', 'sacrificeType']);
+
+      $beneficiary = $distribution->beneficiary;
+
+      if ($beneficiary && !empty($beneficiary->phone)) {
+          $content = "المستفيد المحترم/ {$beneficiary->name}، " .
+                     "تم صرف عدد ({$distribution->quantity}) من {$distribution->sacrificeType->name} " .
+                     "بموجب إيصال رقم: {$distribution->receipt_number}.";
+
+          $this->smsService->sendIndividual($beneficiary, $content, $userId);
+      }
+  }
 }
