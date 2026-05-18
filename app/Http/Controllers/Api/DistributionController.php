@@ -24,13 +24,28 @@ class DistributionController extends Controller
     /**
      * عرض قائمة عمليات التوزيع
      */
-    public function index(): AnonymousResourceCollection
+  /**
+     * عرض قائمة عمليات التوزيع مع دعم البحث
+     */
+    public function index(Request $request): AnonymousResourceCollection
     {
         $this->authorize('viewAny', Distribution::class);
 
-        $distributions = Distribution::with(['beneficiary', 'sacrificeType', 'user', 'installmentContract'])
-            ->latest()
-            ->get();
+        $search = $request->query('search');
+
+        $query = Distribution::with(['beneficiary', 'sacrificeType', 'user', 'installmentContract'])
+            ->latest();
+
+        // تطبيق الفلترة إذا تم تمرير كلمة بحث
+        if (!empty($search)) {
+            $query->whereHas('beneficiary', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%")
+                  ->orWhere('national_id', 'like', "%{$search}%");
+            });
+        }
+
+        $distributions = $query->get();
 
         return DistributionResource::collection($distributions);
     }
