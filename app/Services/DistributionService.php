@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Storage;
 use Exception;
 
 class DistributionService
@@ -14,9 +15,6 @@ class DistributionService
     protected InventoryService $inventoryService;
     protected InstallmentService $installmentService;
 
-    /**
-     * حقن خدمات المخزون والأقساط
-     */
     public function __construct(InventoryService $inventoryService, InstallmentService $installmentService)
     {
         $this->inventoryService = $inventoryService;
@@ -24,13 +22,13 @@ class DistributionService
     }
 
     /**
-     * تنفيذ عملية التوزيع بالكامل
+     * تنفيذ عملية التوزيع بالكامل (خصم من عهدة الجهة وإنشاء أقساط إن وجدت)
      */
     public function distribute(array $data, string $userId): Distribution
     {
         return DB::transaction(function () use ($data, $userId) {
 
-            // 1. التحقق من جهة التوزيع التابع لها المستخدم (المنفذ)
+            // 1. التحقق من جهة التوزيع
             $user = User::findOrFail($userId);
             $distributionEntityId = $user->distribution_entity_id;
 
@@ -38,64 +36,149 @@ class DistributionService
                 throw new Exception("هذا المستخدم غير مرتبط بجهة توزيع حالياً، لا يمكنه إتمام عملية الصرف.");
             }
 
-            $imagePath = null;
-            $documentPath = null;
+            // 2. معالجة المرفقات
+            $imagePath = isset($data['beneficiary_image']) && $data['beneficiary_image'] instanceof UploadedFile
+                ? $this->uploadFile($data['beneficiary_image'], 'distributions/images') : null;
 
-            // 2. معالجة المرفقات مع الالتزام بقاعدتك (الاسم الأصلي)
-            if (isset($data['beneficiary_image']) && $data['beneficiary_image'] instanceof UploadedFile) {
-                $imagePath = $this->uploadFile($data['beneficiary_image'], 'distributions/images');
-            }
+            $documentPath = isset($data['beneficiary_document']) && $data['beneficiary_document'] instanceof UploadedFile
+                ? $this->uploadFile($data['beneficiary_document'], 'distributions/documents') : null;
 
-            if (isset($data['beneficiary_document']) && $data['beneficiary_document'] instanceof UploadedFile) {
-                $documentPath = $this->uploadFile($data['beneficiary_document'], 'distributions/documents');
-            }
-
-            // 3. توليد رقم الإيصال (DECIMAL 18,0)
-            $receiptNumber = $this->generateReceiptNumber();
-
-            // 4. تحديد الكمية (الافتراض 1)
+            // 3. إنشاء سجل التوزيع
             $quantity = isset($data['quantity']) ? (int) $data['quantity'] : 1;
 
-            // 5. إنشاء سجل التوزيع
             $distribution = Distribution::create([
-                'receipt_number'         => $receiptNumber,
-                'distribution_entity_id' => $distributionEntityId, // الجهة التي خرجت منها الأضحية
-                'user_id'                => $userId,               // الموظف المنفذ
+                'receipt_number'         => $this->generateReceiptNumber(),
+                'distribution_entity_id' => $distributionEntityId,
+                'user_id'                => $userId,
                 'beneficiary_id'         => $data['beneficiary_id'],
                 'sacrifice_type_id'      => $data['sacrifice_type_id'],
                 'payment_method'         => $data['payment_method'],
                 'actual_price'           => $data['actual_price'],
-                'quantity'               => $quantity,             // حفظ الكمية في الداتا بيز
+                'quantity'               => $quantity,
                 'beneficiary_image'      => $imagePath,
                 'beneficiary_document'   => $documentPath,
                 'notes'                  => $data['notes'] ?? null,
             ]);
 
-            // 6. خصم الأضحية من عهدة الجهة
-            // الترتيب: sacrificeTypeId, quantity, reference, entityId, warehouseId, userId
+            // 4. خصم الأضحية من عهدة الجهة (ينشئ حركة Out)
             $this->inventoryService->removeStock(
-                $data['sacrifice_type_id'],
-                $quantity,
+                $distribution->sacrifice_type_id,
+                $distribution->quantity,
                 $distribution,
-                $distributionEntityId, // المصدر: جهة التوزيع
-                null,                  // لا يوجد warehouse_id هنا لأن الخصم من عهدة الجهة
-                $userId                // المنفذ
+                $distribution->distribution_entity_id,
+                null,
+                $userId
             );
 
-            // 7. معالجة الأقساط
+            // 5. معالجة الأقساط
             if ($data['payment_method'] === 'installments') {
                 $monthsCount = $data['months_count'] ?? throw new Exception("يرجى تحديد عدد أشهر التقسيط.");
-
-                $this->installmentService->createContract(
-                    $distribution->id,
-                    $data['beneficiary_id'],
-                    $data['actual_price'], // ملاحظة: السعر الفعلي يتم تمريره للـ Service الخاصة بالأقساط كإجمالي أو قسط بناءً على اللوجيك هناك
-                    $monthsCount
-                );
+                $this->installmentService->createContract($distribution->id, $data['beneficiary_id'], $data['actual_price'], $monthsCount);
             }
 
             return $distribution;
         });
+    }
+
+    /**
+     * تحديث بيانات التوزيع (مع التصفير المخزني والمحاسبي الآمن)
+     */
+    public function updateDistribution(Distribution $distribution, array $data, string $userId): Distribution
+    {
+        return DB::transaction(function () use ($distribution, $data, $userId) {
+
+            $newQuantity = $data['quantity'] ?? $distribution->quantity;
+            $newSacrificeTypeId = $data['sacrifice_type_id'] ?? $distribution->sacrifice_type_id;
+            $newActualPrice = $data['actual_price'] ?? $distribution->actual_price;
+            $newPaymentMethod = $data['payment_method'] ?? $distribution->payment_method;
+
+            // التحقق مما إذا كان التعديل يمس الحقول الجوهرية (المخزون أو المال)
+            $coreChanged = (
+                $newQuantity != $distribution->quantity ||
+                $newSacrificeTypeId != $distribution->sacrifice_type_id ||
+                $newActualPrice != $distribution->actual_price ||
+                $newPaymentMethod != $distribution->payment_method
+            );
+
+            if ($coreChanged) {
+                // 1. مسح العقد القديم (ستفشل العملية تلقائياً إذا كان هناك دفعات مسددة بفضل الحماية التي أضفناها)
+                $this->installmentService->reverseContractForDistribution($distribution->id);
+
+                // 2. عكس تأثير حركة المخزون القديمة (إرجاع الرصيد لجهة التوزيع)
+                $this->inventoryService->reverseDocumentMovements($distribution);
+
+                // 3. تحديث بيانات التوزيع
+                $distribution->update([
+                    'quantity'          => $newQuantity,
+                    'sacrifice_type_id' => $newSacrificeTypeId,
+                    'actual_price'      => $newActualPrice,
+                    'payment_method'    => $newPaymentMethod,
+                    'notes'             => $data['notes'] ?? $distribution->notes,
+                ]);
+
+                // 4. خصم الكمية الجديدة من المخزون
+                $this->inventoryService->removeStock(
+                    $distribution->sacrifice_type_id,
+                    $distribution->quantity,
+                    $distribution,
+                    $distribution->distribution_entity_id,
+                    null,
+                    $userId
+                );
+
+                // 5. إنشاء عقد تقسيط جديد إذا كان الدفع الجديد بالأقساط
+                if ($newPaymentMethod === 'installments') {
+                    $monthsCount = $data['months_count'] ?? throw new Exception("يرجى تحديد عدد أشهر التقسيط.");
+                    $this->installmentService->createContract($distribution->id, $distribution->beneficiary_id, $distribution->actual_price, $monthsCount);
+                }
+            } else {
+                // إذا كان التعديل في الملاحظات فقط
+                $distribution->update(['notes' => $data['notes'] ?? $distribution->notes]);
+            }
+
+            return $distribution;
+        });
+    }
+
+    /**
+     * حذف عملية التوزيع كلياً (عكس المخزون والعقود)
+     */
+    public function deleteDistribution(Distribution $distribution): void
+    {
+        DB::transaction(function () use ($distribution) {
+            // 1. مسح العقد (يمنع الحذف إذا وُجدت مبالغ مدفوعة)
+            $this->installmentService->reverseContractForDistribution($distribution->id);
+
+            // 2. عكس التأثير المخزني (إرجاع الكمية لعهدة الجهة)
+            $this->inventoryService->reverseDocumentMovements($distribution);
+
+            // 3. حذف مستند التوزيع نفسه
+            $distribution->delete();
+        });
+    }
+
+    /**
+     * تحديث المرفقات بشكل منفصل
+     */
+    public function updateAttachments(Distribution $distribution, ?UploadedFile $image, ?UploadedFile $document): void
+    {
+        if ($image) {
+            if ($distribution->beneficiary_image) {
+                Storage::disk('public')->delete($distribution->beneficiary_image);
+            }
+            $distribution->beneficiary_image = $this->uploadFile($image, 'distributions/images');
+        }
+
+        if ($document) {
+            if ($distribution->beneficiary_document) {
+                Storage::disk('public')->delete($distribution->beneficiary_document);
+            }
+            $distribution->beneficiary_document = $this->uploadFile($document, 'distributions/documents');
+        }
+
+        if ($image || $document) {
+            $distribution->save();
+        }
     }
 
     /**
@@ -108,27 +191,18 @@ class DistributionService
             ->get();
     }
 
-    /**
-     * رفع الملفات مع الحفاظ على الاسم الأصلي للشفافية
-     */
     private function uploadFile(UploadedFile $file, string $path): string
     {
-        // نستخدم الطابع الزمني فقط لمنع التكرار مع بقاء الاسم الأصلي
         $safeName = time() . '_' . $file->getClientOriginalName();
         return $file->storeAs($path, $safeName, 'public');
     }
 
-    /**
-     * توليد رقم إيصال فريد 18 خانة
-     */
     private function generateReceiptNumber(): string
     {
         $receiptNumber = date('YmdHis') . str_pad((string) random_int(1000, 9999), 4, '0', STR_PAD_LEFT);
-
         while (Distribution::where('receipt_number', $receiptNumber)->exists()) {
             $receiptNumber = date('YmdHis') . str_pad((string) random_int(1000, 9999), 4, '0', STR_PAD_LEFT);
         }
-
         return $receiptNumber;
     }
 }

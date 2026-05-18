@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\InventoryMovementController;
 use App\Http\Controllers\Api\EntityStockController;
 use App\Http\Controllers\Api\InstallmentContractController;
 use App\Http\Controllers\Api\InstallmentPaymentController;
+use App\Http\Controllers\Api\StockReportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -97,6 +98,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // ---------------------------------------------------------------------
     // --- 11. الدفاتر والأرصدة المخزنية (للقراءة فقط) ---
     // ---------------------------------------------------------------------
+
+    // مسارات التقارير اللحظية (تمت إضافتها هنا)
+    Route::get('reports/warehouses', [StockReportController::class, 'warehouses'])->name('reports.warehouses');
+    Route::get('reports/entities', [StockReportController::class, 'entities'])->name('reports.entities');
 
     Route::apiResource('inventory-movements', InventoryMovementController::class)->only(['index', 'show']);
     Route::apiResource('entity-stocks', EntityStockController::class)->only(['index', 'show']);

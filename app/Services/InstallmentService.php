@@ -100,6 +100,25 @@ class InstallmentService
     }
 
     /**
+     * إلغاء ومسح عقد التقسيط بالكامل (يُستخدم عند تعديل أو حذف عملية التوزيع)
+     * يحتوي على حماية محاسبية صارمة تمنع مسح عقد به دفعات
+     */
+    public function reverseContractForDistribution(int $distributionId): void
+    {
+        $contract = InstallmentContract::where('distribution_id', $distributionId)->lockForUpdate()->first();
+
+        if ($contract) {
+            if ($contract->paid_amount > 0) {
+                throw new Exception("حماية محاسبية: لا يمكن تعديل أو حذف هذه التوزيعة لوجود عقد تقسيط تم سداد دفعات منه. يرجى إلغاء الإيصالات المالية المرتبطة أولاً.");
+            }
+
+            // حذف الجدولة والعقد (Soft Delete أو Hard Delete حسب إعداداتك، الافتراضي مسح لتنظيف الداتا)
+            InstallmentSchedule::where('installment_contract_id', $contract->id)->delete();
+            $contract->delete();
+        }
+    }
+
+    /**
      * توزيع المبلغ المدفوع على جدول الأقساط ومعالجة السداد الجزئي (Row-Splitting)
      */
     private function allocatePaymentToSchedules(int $contractId, int $paymentId, int $amountToAllocate): void
@@ -153,13 +172,13 @@ class InstallmentService
     private function generateReceiptNumber(): string
     {
         $prefix = date('YmdHis'); // 14 خانة
-        $random = str_pad(random_int(1000, 9999), 4, '0', STR_PAD_LEFT); // 4 خانات
+        $random = str_pad((string)random_int(1000, 9999), 4, '0', STR_PAD_LEFT); // 4 خانات
 
         $receiptNumber = $prefix . $random; // الإجمالي 18 خانة
 
         // التحقق من عدم التكرار
         while (InstallmentPayment::where('receipt_number', $receiptNumber)->exists()) {
-            $random = str_pad(random_int(1000, 9999), 4, '0', STR_PAD_LEFT);
+            $random = str_pad((string)random_int(1000, 9999), 4, '0', STR_PAD_LEFT);
             $receiptNumber = $prefix . $random;
         }
 

@@ -21,6 +21,7 @@ class UpdateAllocationRequest extends FormRequest
     {
         return [
             'distribution_entity_id' => ['sometimes', 'required', 'exists:distribution_entities,id'],
+            'warehouse_id'           => ['sometimes', 'required', 'exists:warehouses,id'], // تمت إضافته للسماح بتعديل المخزن
             'sacrifice_type_id'      => ['sometimes', 'required', 'exists:sacrifice_types,id'],
             'quantity'               => ['sometimes', 'required', 'integer', 'min:1'],
             'value'                  => ['nullable', 'integer', 'min:0'],
@@ -36,6 +37,8 @@ class UpdateAllocationRequest extends FormRequest
         return [
             'distribution_entity_id.required' => 'يجب تحديد جهة التوزيع المستلمة للعهدة.',
             'distribution_entity_id.exists'   => 'جهة التوزيع المحددة غير موجودة.',
+            'warehouse_id.required'           => 'يجب تحديد المخزن المصدر.',
+            'warehouse_id.exists'             => 'المخزن المحدد غير موجود.',
             'sacrifice_type_id.required'      => 'يجب تحديد نوع الأضحية.',
             'sacrifice_type_id.exists'        => 'نوع الأضحية المحدد غير موجود.',
             'quantity.required'               => 'الكمية مطلوبة.',

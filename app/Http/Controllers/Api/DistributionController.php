@@ -10,7 +10,6 @@ use App\Http\Resources\Api\DistributionResource;
 use App\Services\DistributionService;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 
 class DistributionController extends Controller
@@ -23,26 +22,27 @@ class DistributionController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
+     * عرض قائمة عمليات التوزيع
      */
     public function index(): AnonymousResourceCollection
     {
         $this->authorize('viewAny', Distribution::class);
 
-        // إضافة installmentContract لجلب بيانات التقسيط إن وجدت
-        $distributions = Distribution::with(['beneficiary', 'sacrificeType', 'user', 'installmentContract'])->latest()->get();
+        $distributions = Distribution::with(['beneficiary', 'sacrificeType', 'user', 'installmentContract'])
+            ->latest()
+            ->get();
 
         return DistributionResource::collection($distributions);
     }
 
     /**
-     * Store a newly created resource in storage.
+     * تسجيل عملية توزيع جديدة (مخزون + أقساط)
      */
     public function store(StoreDistributionRequest $request): DistributionResource
     {
         $this->authorize('create', Distribution::class);
 
-        // توجيه الطلب للـ Service لمعالجة العملية المعقدة (مخزون + أقساط + مرفقات)
+        // توجيه الطلب للـ Service لمعالجة العملية المعقدة
         $distribution = $this->distributionService->distribute(
             $request->validated(),
             $request->user()->id
@@ -52,7 +52,7 @@ class DistributionController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * عرض تفاصيل عملية توزيع محددة
      */
     public function show(Distribution $distribution): DistributionResource
     {
@@ -62,50 +62,40 @@ class DistributionController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * تحديث بيانات التوزيع (الكمية، السعر، الأقساط، أو المرفقات)
      */
     public function update(UpdateDistributionRequest $request, Distribution $distribution): DistributionResource
     {
         $this->authorize('update', $distribution);
 
-        // يُسمح فقط بتحديث المرفقات. تغيير نوع الأضحية أو السعر يتطلب حركة عكسية (تسوية)
-        if ($request->hasFile('beneficiary_image')) {
-            // حذف الصورة القديمة
-            if ($distribution->beneficiary_image) {
-                Storage::disk('public')->delete($distribution->beneficiary_image);
-            }
+        // 1. تحديث المرفقات أولاً (إن وُجدت) عبر الـ Service
+        $this->distributionService->updateAttachments(
+            $distribution,
+            $request->file('beneficiary_image'),
+            $request->file('beneficiary_document')
+        );
 
-            // الالتزام التام بالاحتفاظ باسم الملف الأصلي
-            $imageFile = $request->file('beneficiary_image');
-            $safeImageName = time() . '_' . $imageFile->getClientOriginalName();
-            $distribution->beneficiary_image = $imageFile->storeAs('distributions/images', $safeImageName, 'public');
-        }
-
-        if ($request->hasFile('beneficiary_document')) {
-            // حذف المستند القديم
-            if ($distribution->beneficiary_document) {
-                Storage::disk('public')->delete($distribution->beneficiary_document);
-            }
-
-            // الالتزام التام بالاحتفاظ باسم الملف الأصلي
-            $docFile = $request->file('beneficiary_document');
-            $safeDocName = time() . '_' . $docFile->getClientOriginalName();
-            $distribution->beneficiary_document = $docFile->storeAs('distributions/documents', $safeDocName, 'public');
-        }
-
-        $distribution->save();
+        // 2. تحديث البيانات الجوهرية (والمزامنة المخزنية/المحاسبية) عبر الـ Service
+        $distribution = $this->distributionService->updateDistribution(
+            $distribution,
+            $request->validated(),
+            $request->user()->id
+        );
 
         return new DistributionResource($distribution->load(['beneficiary', 'sacrificeType', 'user', 'installmentContract']));
     }
 
     /**
-     * Remove the specified resource from storage.
+     * حذف عملية التوزيع كلياً
      */
     public function destroy(Distribution $distribution): Response
     {
         $this->authorize('delete', $distribution);
 
-        abort(403, 'لا يمكن حذف عملية توزيع تمت بالفعل. يجب عمل تسوية عكسية للمخزون والأقساط.');
+        // الـ Service ستتكفل بمسح العقد (إذا لم يُسدد) وعكس الحركات المخزنية قبل مسح السجل
+        $this->distributionService->deleteDistribution($distribution);
+
+        return response()->noContent();
     }
 
     /**
@@ -113,16 +103,13 @@ class DistributionController extends Controller
      */
     public function receipts(Request $request): AnonymousResourceCollection
     {
-        // التحقق من أن الواجهة الأمامية أرسلت مصفوفة من الـ IDs
         $request->validate([
             'ids'   => 'required|array',
             'ids.*' => 'exists:distributions,id',
         ]);
 
-        // جلب البيانات عبر الخدمة
         $distributions = $this->distributionService->getReceipts($request->ids);
 
-        // إعادة البيانات باستخدام الـ Resource الحالي الممتاز
         return DistributionResource::collection($distributions);
     }
 }

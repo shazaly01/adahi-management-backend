@@ -58,26 +58,29 @@ class AllocationController extends Controller
     }
 
     /**
-     * تحديث بيانات العهدة (الملاحظات والقيمة فقط)
+     * تحديث بيانات العهدة (مع دعم التعديل المخزني عبر الـ Service)
      */
     public function update(UpdateAllocationRequest $request, Allocation $allocation): AllocationResource
     {
         $this->authorize('update', $allocation);
 
-        $allocation->update($request->safe()->only(['value', 'notes']));
+        // إرسال البيانات للـ Service للتحقق من التغيير المخزني ومعالجته
+        $allocation = $this->allocationService->updateAllocation($allocation, $request->validated());
 
         return new AllocationResource($allocation->load(['distributionEntity', 'sacrificeType', 'warehouse']));
     }
 
     /**
-     * حذف العهدة (ممنوع نظاماً)
+     * حذف العهدة كلياً وعكس حركاتها المخزنية
      */
     public function destroy(Allocation $allocation): Response
     {
         $this->authorize('delete', $allocation);
 
-        // الالتزام بقاعدتك: لا حذف للعهد لضمان التوازن المخزني
-        abort(403, 'لا يمكن حذف عُهدة تم تسليمها لجهة التوزيع. يرجى استخدام نظام "حركات الإرجاع" لعكس العملية مخزنياً.');
+        // توجيه أمر الحذف للـ Service
+        $this->allocationService->deleteAllocation($allocation);
+
+        return response()->noContent();
     }
 
     /**

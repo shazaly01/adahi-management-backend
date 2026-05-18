@@ -20,8 +20,8 @@ class InventoryService
 
             $movement = InventoryMovement::create([
                 'sacrifice_type_id'      => $sacrificeTypeId,
-                'warehouse_id'           => $warehouseId,           // تسجيل المخزن المستلم
-                'distribution_entity_id' => $distributionEntityId,  // أو الجهة المستلمة
+                'warehouse_id'           => $warehouseId,
+                'distribution_entity_id' => $distributionEntityId,
                 'user_id'                => $userId,
                 'movement_type'          => 'in',
                 'quantity'               => $quantity,
@@ -61,7 +61,7 @@ class InventoryService
                 }
                 $stock->decrement('quantity', $quantity);
             } else {
-                // التحقق من رصيد مخزن معين بدلاً من الرصيد العام المبهم
+                // التحقق من رصيد مخزن معين
                 $currentBalance = $this->getWarehouseBalance($sacrificeTypeId, $warehouseId);
                 if ($currentBalance < $quantity) {
                     throw new Exception("الرصيد في المخزن المحدد لا يكفي لإتمام هذه العملية.");
@@ -115,45 +115,37 @@ class InventoryService
     }
 
     /**
-     * تعديل حركة سابقة (الحفاظ على منطق الـ Soft Delete والتحسيب الذي بنيناه)
+     * الجوهر الجديد: عكس وإلغاء تأثير جميع الحركات المرتبطة بمستند معين (استعداداً لإعادة إنشائها بالكميات الجديدة)
      */
-    public function updateMovementQuantity(string $movementId, int $newQuantity, ?string $userId = null): InventoryMovement
+    public function reverseDocumentMovements(Model $reference): void
     {
-        return DB::transaction(function () use ($movementId, $newQuantity, $userId) {
-            $oldMovement = InventoryMovement::lockForUpdate()->findOrFail($movementId);
+        // جلب جميع الحركات التابعة لهذا المستند (سواء كانت حركة واحدة كالتوريد، أو حركتين كالتخصيص)
+        $movements = InventoryMovement::where('reference_type', get_class($reference))
+            ->where('reference_id', $reference->id)
+            ->lockForUpdate()
+            ->get();
 
-            if ($oldMovement->quantity === $newQuantity) {
-                return $oldMovement;
-            }
-
-            // منع تعديل الحركات المرتبطة بجهات التوزيع إذا كان الرصيد لا يسمح
-            if ($oldMovement->distribution_entity_id) {
-                $stock = EntityStock::where('distribution_entity_id', $oldMovement->distribution_entity_id)
-                    ->where('sacrifice_type_id', $oldMovement->sacrifice_type_id)
+        foreach ($movements as $movement) {
+            // إذا كانت الحركة مرتبطة بجهة توزيع، يجب عكس تأثيرها على الرصيد التجميعي أولاً
+            if ($movement->distribution_entity_id) {
+                $stock = EntityStock::where('distribution_entity_id', $movement->distribution_entity_id)
+                    ->where('sacrifice_type_id', $movement->sacrifice_type_id)
                     ->lockForUpdate()
                     ->first();
 
-                $diff = $newQuantity - $oldMovement->quantity;
-                $newStock = ($oldMovement->movement_type === 'in') ? $stock->quantity + $diff : $stock->quantity - $diff;
-
-                if ($newStock < 0) {
-                    throw new Exception("التعديل سيؤدي لرصيد سالب لدى الجهة.");
+                if ($stock) {
+                    if ($movement->movement_type === 'in') {
+                        // عكس الدخول هو طرح الكمية
+                        $stock->decrement('quantity', $movement->quantity);
+                    } elseif ($movement->movement_type === 'out') {
+                        // عكس الخروج هو إضافة الكمية
+                        $stock->increment('quantity', $movement->quantity);
+                    }
                 }
-                $stock->update(['quantity' => $newStock]);
             }
 
-            $oldMovement->delete();
-
-            return InventoryMovement::create([
-                'sacrifice_type_id'      => $oldMovement->sacrifice_type_id,
-                'warehouse_id'           => $oldMovement->warehouse_id,
-                'distribution_entity_id' => $oldMovement->distribution_entity_id,
-                'user_id'                => $userId ?? $oldMovement->user_id,
-                'movement_type'          => $oldMovement->movement_type,
-                'quantity'               => $newQuantity,
-                'reference_type'         => $oldMovement->reference_type,
-                'reference_id'           => $oldMovement->reference_id,
-            ]);
-        });
+            // أخيراً: حذف الحركة (Soft Delete) للاحتفاظ بها في الأرشيف وإخراجها من الحسابات الحالية
+            $movement->delete();
+        }
     }
 }
