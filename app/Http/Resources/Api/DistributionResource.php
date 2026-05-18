@@ -38,6 +38,8 @@ class DistributionResource extends JsonResource
             // تمرير الملاحظات أيضاً لتظهر في تفاصيل الإيصال إذا لزم الأمر
             'notes' => $this->notes,
             'delivery_location' => $this->delivery_location,
+            'is_delivered' => (bool) $this->is_delivered,
+             'delivery_date' => $this->delivery_date?->format('Y-m-d H:i:s'),
 
             // إضافة مسارات Mرفقات لتظهر كروابط مباشرة في الواجهة
             'beneficiary_image' => $this->beneficiary_image ? asset('storage/' . $this->beneficiary_image) : null,

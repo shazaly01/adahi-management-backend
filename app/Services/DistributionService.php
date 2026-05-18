@@ -65,7 +65,6 @@ class DistributionService
                 'beneficiary_document'   => $documentPath,
                 'notes'                  => $data['notes'] ?? null,
                 'delivery_location'      => $data['delivery_location'] ?? null,
-                'is_delivered'           => $data['is_delivered'] ?? false,
                 'delivery_date'          => $data['delivery_date'] ?? null,
                 // الحقول الجديدة تأخذ قيمها الافتراضية من الـ Migration (false و null)
             ]);
@@ -110,6 +109,8 @@ class DistributionService
             $newSacrificeTypeId = $data['sacrifice_type_id'] ?? $distribution->sacrifice_type_id;
             $newActualPrice = $data['actual_price'] ?? $distribution->actual_price;
             $newPaymentMethod = $data['payment_method'] ?? $distribution->payment_method;
+            $newDeliveryDate = array_key_exists('delivery_date', $data) ? $data['delivery_date'] : $distribution->delivery_date;
+
 
             // التحقق مما إذا كان التعديل يمس الحقول الجوهرية (المخزون أو المال)
             $coreChanged = (
@@ -134,6 +135,7 @@ class DistributionService
                     'payment_method'    => $newPaymentMethod,
                     'notes'             => $data['notes'] ?? $distribution->notes,
                     'delivery_location' => $data['delivery_location'] ?? $distribution->delivery_location,
+                    'delivery_date'     => $newDeliveryDate,
                 ]);
 
                 // 4. خصم الكمية الجديدة من المخزون
@@ -156,6 +158,7 @@ class DistributionService
                 $distribution->update([
         'notes'             => $data['notes'] ?? $distribution->notes,
         'delivery_location' => $data['delivery_location'] ?? $distribution->delivery_location, // 💡 أضف هذا السطر هنا أيضاً
+        'delivery_date'     => $newDeliveryDate,
     ]);
 
             }
