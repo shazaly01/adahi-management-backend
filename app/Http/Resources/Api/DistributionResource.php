@@ -37,6 +37,7 @@ class DistributionResource extends JsonResource
 
             // تمرير الملاحظات أيضاً لتظهر في تفاصيل الإيصال إذا لزم الأمر
             'notes' => $this->notes,
+            'delivery_location' => $this->delivery_location,
 
             // إضافة مسارات Mرفقات لتظهر كروابط مباشرة في الواجهة
             'beneficiary_image' => $this->beneficiary_image ? asset('storage/' . $this->beneficiary_image) : null,

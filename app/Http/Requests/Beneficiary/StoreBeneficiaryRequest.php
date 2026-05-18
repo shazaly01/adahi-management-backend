@@ -27,6 +27,7 @@ class StoreBeneficiaryRequest extends FormRequest
             'national_id' => ['nullable', 'numeric', 'digits_between:1,18', 'unique:beneficiaries,national_id'],
             'phone' => ['required', 'string', 'max:20'],
             'job_number' => ['nullable', 'string', 'max:50'],
+            'address' => ['nullable', 'string', 'max:500'],
         ];
     }
 

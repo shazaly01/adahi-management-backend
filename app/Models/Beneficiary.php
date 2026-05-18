@@ -18,6 +18,7 @@ class Beneficiary extends Model
         'national_id',
         'phone',
         'job_number',
+        'address',
     ];
 
     protected $casts = [

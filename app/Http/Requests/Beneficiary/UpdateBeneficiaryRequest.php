@@ -38,6 +38,7 @@ class UpdateBeneficiaryRequest extends FormRequest
 
             'phone' => ['required', 'string', 'max:20'],
             'job_number' => ['nullable', 'string', 'max:50'],
+            'address' => ['nullable', 'string', 'max:500'],
         ];
     }
 

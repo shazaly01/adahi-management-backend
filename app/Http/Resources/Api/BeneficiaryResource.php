@@ -22,6 +22,7 @@ class BeneficiaryResource extends JsonResource
             'national_id' => (string) $this->national_id,
             'phone' => $this->phone, // حقل الهاتف الجديد
             'job_number' => $this->job_number,
+            'address' => $this->address,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];

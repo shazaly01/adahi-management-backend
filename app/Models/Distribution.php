@@ -24,7 +24,8 @@ class Distribution extends Model
         'quantity',               // تمت الإضافة لدعم العدد
         'beneficiary_image',      // تمت الإضافة لمنع خطأ Mass Assignment
         'beneficiary_document',   // تمت الإضافة لمنع خطأ Mass Assignment
-        'notes',                  // تمت الإضافة لمنع خطأ Mass Assignment
+        'notes',
+        'delivery_location',            // تمت الإضافة لمنع خطأ Mass Assignment
     ];
 
     protected $casts = [

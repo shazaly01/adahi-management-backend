@@ -64,6 +64,7 @@ class DistributionService
                 'beneficiary_image'      => $imagePath,
                 'beneficiary_document'   => $documentPath,
                 'notes'                  => $data['notes'] ?? null,
+                'delivery_location'      => $data['delivery_location'] ?? null,
             ]);
 
             // 4. خصم الأضحية من عهدة الجهة (ينشئ حركة Out)
@@ -129,6 +130,7 @@ class DistributionService
                     'actual_price'      => $newActualPrice,
                     'payment_method'    => $newPaymentMethod,
                     'notes'             => $data['notes'] ?? $distribution->notes,
+                    'delivery_location' => $data['delivery_location'] ?? $distribution->delivery_location,
                 ]);
 
                 // 4. خصم الكمية الجديدة من المخزون
@@ -148,7 +150,11 @@ class DistributionService
                 }
             } else {
                 // إذا كان التعديل في الملاحظات فقط
-                $distribution->update(['notes' => $data['notes'] ?? $distribution->notes]);
+                $distribution->update([
+        'notes'             => $data['notes'] ?? $distribution->notes,
+        'delivery_location' => $data['delivery_location'] ?? $distribution->delivery_location, // 💡 أضف هذا السطر هنا أيضاً
+    ]);
+
             }
 
             return $distribution;
