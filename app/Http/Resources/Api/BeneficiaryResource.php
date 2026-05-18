@@ -23,6 +23,7 @@ class BeneficiaryResource extends JsonResource
             'phone' => $this->phone, // حقل الهاتف الجديد
             'job_number' => $this->job_number,
             'address' => $this->address,
+            'distributions_count' => $this->whenCounted('distributions'),
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];

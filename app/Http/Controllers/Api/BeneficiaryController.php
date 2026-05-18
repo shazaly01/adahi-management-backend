@@ -47,7 +47,7 @@ class BeneficiaryController extends Controller
 
         $user = $request->user();
 
-        $query = Beneficiary::with('user')->where(function ($q) use ($term) {
+        $query = Beneficiary::with('user')->withCount('distributions')->where(function ($q) use ($term) {
             $q->where('national_id', $term)
               ->orWhere('phone', $term)
               ->orWhere('name', 'LIKE', "%{$term}%");
