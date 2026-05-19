@@ -15,27 +15,29 @@ class Distribution extends Model
 
     protected $fillable = [
         'receipt_number',
-        'distribution_entity_id', // تمت الإضافة لمنع خطأ Mass Assignment
+        'group',
+        'distribution_entity_id',
         'user_id',
         'beneficiary_id',
         'sacrifice_type_id',
         'payment_method',
         'actual_price',
-        'quantity',               // تمت الإضافة لدعم العدد
-        'beneficiary_image',      // تمت الإضافة لمنع خطأ Mass Assignment
-        'beneficiary_document',   // تمت الإضافة لمنع خطأ Mass Assignment
+        'quantity',
+        'beneficiary_image',
+        'beneficiary_document',
         'notes',
-        'delivery_location',            // تمت الإضافة لمنع خطأ Mass Assignment
-        'is_delivered',  // تمت إضافة حقل حالة التسليم
-        'delivery_date', // تمت إضافة حقل تاريخ التسليم
+        'delivery_location',
+        'is_delivered',
+        'delivery_date',
     ];
 
     protected $casts = [
         'receipt_number' => 'string',
+        'group' => 'string',
         'actual_price' => 'integer',
         'quantity' => 'integer',
-        'is_delivered' => 'boolean',   // تحويل الحقل إلى قيمة منطقية
-        'delivery_date' => 'datetime', // تحويل الحقل إلى كائن تاريخ ووقت
+        'is_delivered' => 'boolean',
+        'delivery_date' => 'datetime',
     ];
 
     public function user(): BelongsTo
@@ -58,11 +60,14 @@ class Distribution extends Model
         return $this->hasOne(InstallmentContract::class);
     }
 
-    /**
-     * ربط التوزيع بسجل الحركات كحركة خروج
-     */
     public function inventoryMovements(): MorphMany
     {
         return $this->morphMany(InventoryMovement::class, 'reference');
+    }
+
+    // --- تم إضافة هذه العلاقة لحل الخطأ ---
+    public function distributionEntity(): BelongsTo
+    {
+        return $this->belongsTo(DistributionEntity::class, 'distribution_entity_id');
     }
 }

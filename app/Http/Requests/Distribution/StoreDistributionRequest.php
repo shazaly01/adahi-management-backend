@@ -42,6 +42,7 @@ class StoreDistributionRequest extends FormRequest
             'notes' => ['nullable', 'string', 'max:1000'],
             'delivery_location' => ['nullable', 'string', 'max:255'],
             'delivery_date' => ['required_if:is_delivered,true', 'nullable', 'date'],
+            'group' => ['nullable', 'string', 'max:255'],
         ];
     }
 

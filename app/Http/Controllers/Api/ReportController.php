@@ -3,206 +3,244 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Treasury;
+use App\Models\InventoryMovement;
+use App\Models\Distribution;
+use App\Models\EntityStock;
 use App\Models\Beneficiary;
-use App\Models\TreasuryTransaction;
-use App\Models\InKindAssistanceItem;
-use App\Models\InKindAssistance; // أضف هذا السطر
-use App\Models\FinancialAssistance;
-
-use App\Http\Requests\Report\TreasuryStatementRequest;
-use App\Http\Requests\Report\BeneficiaryStatementRequest;
-use App\Http\Requests\Report\PeriodReportRequest;
-use App\Http\Resources\Api\TreasuryStatementResource;
-
+use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
-    public function treasuryStatement(TreasuryStatementRequest $request): JsonResponse
+
+
+
+/**
+     * 1. لوحة القيادة المركزية (Dashboard) - غنية بالإحصائيات والتحليلات
+     */
+    public function dashboard(Request $request): JsonResponse
     {
-        // فحص الصلاحية: يجب أن يملك المستخدم صلاحية عرض الخزينة
-        $this->authorize('viewAny', Treasury::class);
+        // التحقق من الصلاحية (يمكنك تغييرها لـ dashboard.view إذا أردت)
+       // abort_if(!$request->user()->can('dashboard.view'), 403, 'لا تملك صلاحية عرض لوحة التحكم');
 
-        $treasuryId = $request->treasury_id;
-        $from = $request->from_date;
-        $to = $request->to_date;
+        // --- 1. المؤشرات الرئيسية (KPIs) ---
+        $totalBeneficiaries = Beneficiary::count();
+        $totalDistributed = Distribution::sum('quantity');
 
-        $treasury = Treasury::findOrFail($treasuryId);
+        $totalIn = InventoryMovement::where('movement_type', 'in')->sum('quantity');
+        $totalOut = InventoryMovement::where('movement_type', 'out')->sum('quantity');
+        $currentGlobalStock = $totalIn - $totalOut;
 
-        $previousIn = TreasuryTransaction::where('treasury_id', $treasuryId)
-            ->where('transaction_date', '<', $from)
-            ->where('transaction_type', 'deposit')
-            ->sum('amount');
+        // --- 2. إحصائيات التوزيع حسب نوع الأضحية (ممتاز للرسوم البيانية) ---
+        $distributionsByType = Distribution::select('sacrifice_type_id', DB::raw('SUM(quantity) as total_quantity'))
+            ->groupBy('sacrifice_type_id')
+            ->with('sacrificeType:id,name') // جلب الاسم فقط لتخفيف الحمولة
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'name' => $item->sacrificeType ? $item->sacrificeType->name : 'غير محدد',
+                    'total' => (int) $item->total_quantity,
+                ];
+            });
 
-        $previousOut = TreasuryTransaction::where('treasury_id', $treasuryId)
-            ->where('transaction_date', '<', $from)
-            ->where('transaction_type', 'withdrawal')
-            ->sum('amount');
+        // --- 3. أفضل الجهات توزيعاً (Top 5 Distribution Entities) ---
+        $topEntities = Distribution::select('distribution_entity_id', DB::raw('SUM(quantity) as total_quantity'))
+            ->groupBy('distribution_entity_id')
+            ->with('distributionEntity:id,name')
+            ->orderByDesc('total_quantity')
+            ->take(5)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'name' => $item->distributionEntity ? $item->distributionEntity->name : 'جهة غير محددة',
+                    'total' => (int) $item->total_quantity,
+                ];
+            });
 
-        $openingBalance = $previousIn - $previousOut;
-
-        $transactions = TreasuryTransaction::with('user')
-            ->where('treasury_id', $treasuryId)
-            ->whereBetween('transaction_date', [$from, $to])
-            ->orderBy('transaction_date', 'asc')
-            ->orderBy('created_at', 'asc')
-            ->get();
-
-        $periodIn = $transactions->where('transaction_type', 'deposit')->sum('amount');
-        $periodOut = $transactions->where('transaction_type', 'withdrawal')->sum('amount');
+        // --- 4. أحدث النشاطات (آخر 5 عمليات توزيع) ---
+        $recentDistributions = Distribution::with([
+                'beneficiary:id,name',
+                'distributionEntity:id,name',
+                'sacrificeType:id,name'
+            ])
+            ->latest()
+            ->take(5)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'receipt_number' => $item->receipt_number,
+                    'beneficiary_name' => $item->beneficiary ? $item->beneficiary->name : 'غير معروف',
+                    'entity_name' => $item->distributionEntity ? $item->distributionEntity->name : 'غير محدد',
+                    'sacrifice_type' => $item->sacrificeType ? $item->sacrificeType->name : '',
+                    'quantity' => (int) $item->quantity,
+                    'date' => $item->created_at->format('Y-m-d H:i'),
+                ];
+            });
 
         return response()->json([
-            'status' => true,
-            'info' => [
-                'treasury_name'   => $treasury->name,
-                'period'          => ['from' => $from, 'to' => $to],
-                'opening_balance' => (float) $openingBalance,
-                'total_in'        => (float) $periodIn,
-                'total_out'       => (float) $periodOut,
-                'closing_balance' => (float) ($openingBalance + $periodIn - $periodOut),
-            ],
-            'transactions' => TreasuryStatementResource::collection($transactions)
+            'success' => true,
+            'data' => [
+                'kpis' => [
+                    'total_beneficiaries' => $totalBeneficiaries,
+                    'total_distributed' => (int) $totalDistributed,
+                    'current_global_stock' => (int) $currentGlobalStock,
+                ],
+                'charts' => [
+                    'distributions_by_type' => $distributionsByType,
+                    'top_entities' => $topEntities,
+                ],
+                'recent_activities' => $recentDistributions,
+            ]
         ]);
     }
-
-    public function beneficiaryStatement(BeneficiaryStatementRequest $request): JsonResponse
+    /**
+     * 1. تقرير حركة وأرصدة المخزون (الدفتر العام)
+     */
+    public function inventoryReport(Request $request): JsonResponse
     {
-        // فحص الصلاحية: يجب أن يملك المستخدم صلاحية عرض المستفيدين
-        $this->authorize('viewAny', Beneficiary::class);
+        // التحقق من الصلاحية
+        //abort_if(!$request->user()->hasPermissionTo('report.view'), 403, 'لا تملك صلاحية عرض التقارير');
 
-        $beneficiary = Beneficiary::with([
-            'financialAssistances',
-            'inKindAssistances.items'
-        ])->findOrFail($request->beneficiary_id);
+        $query = InventoryMovement::with(['warehouse', 'distributionEntity', 'sacrificeType', 'user']);
 
-        $totalFinancial = $beneficiary->financialAssistances->sum('approved_amount');
-        $totalInKindCount = $beneficiary->inKindAssistances->count();
+        // تطبيق الفلاتر الديناميكية
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->end_date);
+        }
+        if ($request->filled('warehouse_id')) {
+            $query->where('warehouse_id', $request->warehouse_id);
+        }
+        if ($request->filled('distribution_entity_id')) {
+            $query->where('distribution_entity_id', $request->distribution_entity_id);
+        }
+        if ($request->filled('sacrifice_type_id')) {
+            $query->where('sacrifice_type_id', $request->sacrifice_type_id);
+        }
+        if ($request->filled('movement_type')) {
+            $query->where('movement_type', $request->movement_type);
+        }
+
+        $totalIn = (clone $query)->where('movement_type', 'in')->sum('quantity');
+        $totalOut = (clone $query)->where('movement_type', 'out')->sum('quantity');
+        $netBalance = $totalIn - $totalOut;
+
+        $movements = $query->latest()->get();
 
         return response()->json([
-            'status' => true,
+            'success' => true,
             'data' => [
-                'beneficiary_info' => [
-                    'name' => $beneficiary->name,
-                    'national_id' => $beneficiary->national_id,
-                    'phone' => $beneficiary->phone,
-                    'total_financial_received' => (float) $totalFinancial,
-                    'total_in_kind_requests' => $totalInKindCount,
+                'summary' => [
+                    'total_in' => (int) $totalIn,
+                    'total_out' => (int) $totalOut,
+                    'net_balance' => (int) $netBalance,
                 ],
-                'financial_history' => $beneficiary->financialAssistances->map(function ($aid) {
-                    return [
-                        'date' => $aid->request_date,
-                        'type' => $aid->type == 'social' ? 'اجتماعية' : 'علاجية',
-                        'amount' => (float) $aid->approved_amount,
-                    ];
-                }),
-                'in_kind_history' => $beneficiary->inKindAssistances->map(function ($aid) {
-                    return [
-                        'date' => $aid->request_date,
-                        'reasons' => $aid->reasons,
-                        'items' => $aid->items->pluck('description'),
-                    ];
-                }),
+                'movements' => $movements
             ]
         ]);
     }
 
-    public function inKindDistributionReport(PeriodReportRequest $request): JsonResponse
+    /**
+     * 2. تقرير التوزيع والمستفيدين (شاشة ديناميكية ذكية)
+     */
+    public function distributionsReport(Request $request): JsonResponse
     {
-        // فحص الصلاحية: هل مسموح له برؤية المساعدات العينية؟
-        $this->authorize('viewAny', InKindAssistance::class);
+        // التحقق من الصلاحية
+       // abort_if(!$request->user()->hasPermissionTo('report.view'), 403, 'لا تملك صلاحية عرض التقارير');
 
-        $from = $request->from_date;
-        $to = $request->to_date;
+        $query = Distribution::with(['beneficiary', 'distributionEntity', 'sacrificeType']);
 
-        $distribution = InKindAssistanceItem::query()
-            ->whereHas('assistance', function ($query) use ($from, $to) {
-                $query->whereBetween('request_date', [$from, $to]);
-            })
-            ->select('description', DB::raw('count(*) as total_distributed'))
-            ->groupBy('description')
-            ->orderBy('total_distributed', 'desc')
-            ->get();
+        // 1. تطبيق الفلاتر
+        if ($request->filled('distribution_entity_id')) {
+            $query->where('distribution_entity_id', $request->distribution_entity_id);
+        }
+        if ($request->filled('group')) {
+            $query->where('group', $request->group);
+        }
+        if ($request->filled('delivery_location')) {
+            $query->where('delivery_location', $request->delivery_location);
+        }
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->end_date);
+        }
 
-        return response()->json([
-            'status' => true,
-            'info' => [
-                'report_name' => 'تقرير توزيع المساعدات العينية',
-                'period'      => ['from' => $from, 'to' => $to],
-                'unique_items_types' => $distribution->count(),
-                'total_items_pieces' => $distribution->sum('total_distributed'),
-            ],
-            'data' => $distribution
-        ]);
-    }
+        $distributions = $query->latest()->get();
 
-    public function globalBalances(): JsonResponse
-    {
-        // فحص الصلاحية: هل مسموح له برؤية أرصدة الخزائن؟
-        $this->authorize('viewAny', Treasury::class);
+        // 2. حساب الرصيد الحالي (Current Balance) من EntityStock بناءً على الفلاتر
+        $stockQuery = EntityStock::query();
+        if ($request->filled('distribution_entity_id')) {
+            $stockQuery->where('distribution_entity_id', $request->distribution_entity_id);
+        }
+        $currentBalance = (int) $stockQuery->sum('quantity');
 
-        $treasuries = Treasury::select('id', 'name', 'balance')
-            ->orderBy('balance', 'desc')
-            ->get();
+        // 3. تحديد نوع التجميع (Group By)
+        $groupBy = $request->get('group_by', 'all');
 
-        return response()->json([
-            'status' => true,
-            'info' => [
-                'report_name' => 'ملخص أرصدة الخزائن اللحظي',
-                'generated_at' => now()->toDateTimeString(),
-                'total_funds_available' => (float) $treasuries->sum('balance'),
-                'treasuries_count' => $treasuries->count(),
-            ],
-            'data' => $treasuries->map(function ($treasury) {
+        if ($groupBy === 'location') {
+            $groupedDistributions = $distributions->groupBy(function ($item) {
+                return $item->delivery_location ?? 'بدون مكان تسليم';
+            });
+        } elseif ($groupBy === 'group') {
+            $groupedDistributions = $distributions->groupBy(function ($item) {
+                return $item->group ?? 'بدون مجموعة';
+            });
+        } elseif ($groupBy === 'entity') {
+            $groupedDistributions = $distributions->groupBy(function ($item) {
+                return $item->distributionEntity ? $item->distributionEntity->name : 'جهة غير محددة';
+            });
+        } else {
+            // حالة 'all' (الكل) - يتم وضعهم في مجموعة واحدة اسمها "الكل" لتوحيد هيكل JSON للـ Frontend
+            $groupedDistributions = collect(['الكل' => $distributions]);
+        }
+
+        // 4. تشكيل البيانات النهائية
+        $formattedData = $groupedDistributions->map(function ($items, $groupName) {
+
+            // تجميع المستفيدين داخل هذا القسم
+            $beneficiariesList = $items->groupBy('beneficiary_id')->map(function ($benItems) {
+                $beneficiary = $benItems->first()->beneficiary;
                 return [
-                    'id' => $treasury->id,
-                    'name' => $treasury->name,
-                    'balance' => (float) $treasury->balance,
+                    'beneficiary_id' => $beneficiary ? $beneficiary->id : null,
+                    'beneficiary_name' => $beneficiary ? $beneficiary->name : 'مستفيد غير معروف',
+                    'national_id' => $beneficiary ? $beneficiary->national_id : '',
+                    'total_quantity' => (int) $benItems->sum('quantity'),
+                    'details' => $benItems->map(function ($item) {
+                        return [
+                            'id' => $item->id,
+                            'receipt_number' => $item->receipt_number,
+                            'sacrifice_type' => $item->sacrificeType ? $item->sacrificeType->name : 'غير محدد',
+                            'quantity' => (int) $item->quantity,
+                            'delivery_date' => $item->delivery_date ? $item->delivery_date->format('Y-m-d') : null,
+                            'is_delivered' => (bool) $item->is_delivered,
+                        ];
+                    })->values()
                 ];
-            })
-        ]);
-    }
+            })->values();
 
-    public function financialAidByType(PeriodReportRequest $request): JsonResponse
-    {
-        // فحص الصلاحية: هل مسموح له برؤية المساعدات المالية؟
-        $this->authorize('viewAny', FinancialAssistance::class);
-
-        $from = $request->from_date;
-        $to = $request->to_date;
-
-        $stats = FinancialAssistance::query()
-            ->whereBetween('request_date', [$from, $to])
-            ->select(
-                'type',
-                DB::raw('SUM(approved_amount) as total_amount'),
-                DB::raw('COUNT(*) as cases_count')
-            )
-            ->groupBy('type')
-            ->get();
-
-        $grandTotal = $stats->sum('total_amount');
-
-        $reportData = $stats->map(function ($item) use ($grandTotal) {
             return [
-                'type_key'    => $item->type,
-                'type_name'   => $item->type == 'social' ? 'مساعدات اجتماعية' : 'مساعدات علاجية',
-                'amount'      => (float) $item->total_amount,
-                'cases_count' => $item->cases_count,
-                'percentage'  => $grandTotal > 0 ? round(($item->total_amount / $grandTotal) * 100, 2) : 0,
+                'group_name' => (string) $groupName,
+                'total_group_quantity' => (int) $items->sum('quantity'),
+                'beneficiaries' => $beneficiariesList
             ];
-        });
+        })->values();
 
+        // 5. إرجاع الاستجابة
         return response()->json([
-            'status' => true,
-            'info' => [
-                'report_name' => 'تحليل المساعدات المالية حسب النوع',
-                'period'      => ['from' => $from, 'to' => $to],
-                'grand_total' => (float) $grandTotal,
-                'total_cases' => $stats->sum('cases_count'),
-            ],
-            'data' => $reportData
+            'success' => true,
+            'data' => [
+                'summary' => [
+                    'total_distributed' => (int) $distributions->sum('quantity'),
+                    'current_balance' => $currentBalance,
+                ],
+                'grouped_data' => $formattedData
+            ]
         ]);
     }
 }

@@ -67,6 +67,9 @@ class PermissionSeeder extends Seeder
             // المخزون والأرصدة
             'inventory.view',
 
+            // التقارير (الصلاحية الجديدة)
+            'report.view',
+
             // صلاحيات التوزيع المخصصة (تُمنح للموزع حسب الشاشة)
             'distribute.free',          // معفى
             'distribute.cash',          // كاش

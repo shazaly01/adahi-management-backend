@@ -18,6 +18,7 @@ class DistributionResource extends JsonResource
         return [
             'id' => $this->id,
             'receipt_number' => (string) $this->receipt_number,
+            'group' => $this->group,
             'user_id' => $this->user_id,
             'distributor' => $this->whenLoaded('user', function () {
                 return [

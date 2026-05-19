@@ -63,6 +63,7 @@ class DistributionService
                 'quantity'               => $quantity,
                 'beneficiary_image'      => $imagePath,
                 'beneficiary_document'   => $documentPath,
+                'group'                  => $data['group'] ?? null,
                 'notes'                  => $data['notes'] ?? null,
                 'delivery_location'      => $data['delivery_location'] ?? null,
                 'delivery_date'          => $data['delivery_date'] ?? null,
@@ -134,6 +135,7 @@ class DistributionService
                     'actual_price'      => $newActualPrice,
                     'payment_method'    => $newPaymentMethod,
                     'notes'             => $data['notes'] ?? $distribution->notes,
+                    'group'             => array_key_exists('group', $data) ? $data['group'] : $distribution->group,
                     'delivery_location' => $data['delivery_location'] ?? $distribution->delivery_location,
                     'delivery_date'     => $newDeliveryDate,
                 ]);
@@ -153,14 +155,14 @@ class DistributionService
                     $monthsCount = $data['months_count'] ?? throw new Exception("يرجى تحديد عدد أشهر التقسيط.");
                     $this->installmentService->createContract($distribution->id, $distribution->beneficiary_id, $distribution->actual_price, $monthsCount);
                 }
-            } else {
+    } else {
                 // إذا كان التعديل في الملاحظات فقط
                 $distribution->update([
+        'group'             => array_key_exists('group', $data) ? $data['group'] : $distribution->group, // 💡 إضافة المجموعة
         'notes'             => $data['notes'] ?? $distribution->notes,
-        'delivery_location' => $data['delivery_location'] ?? $distribution->delivery_location, // 💡 أضف هذا السطر هنا أيضاً
+        'delivery_location' => $data['delivery_location'] ?? $distribution->delivery_location,
         'delivery_date'     => $newDeliveryDate,
     ]);
-
             }
 
             return $distribution;

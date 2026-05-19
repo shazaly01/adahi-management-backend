@@ -8,13 +8,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\BackupController;
-use App\Http\Controllers\Api\DashboardController;
-use App\Http\Controllers\Api\InKindAssistanceController;
-use App\Http\Controllers\Api\FinancialAssistanceController;
-use App\Http\Controllers\Api\TreasuryController;
-use App\Http\Controllers\Api\TreasuryTransactionController;
 use App\Http\Controllers\Api\ReportController;
-use App\Http\Controllers\Api\AreaController;
 use App\Http\Controllers\Api\MessageController;
 
 // --- استيراد الـ Controllers الجديدة (نظام الأضاحي والمخزون) ---
@@ -31,7 +25,7 @@ use App\Http\Controllers\Api\InventoryMovementController;
 use App\Http\Controllers\Api\EntityStockController;
 use App\Http\Controllers\Api\InstallmentContractController;
 use App\Http\Controllers\Api\InstallmentPaymentController;
-use App\Http\Controllers\Api\StockReportController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -47,7 +41,7 @@ Route::post('distributions/receipts', [DistributionController::class, 'receipts'
 Route::middleware('auth:sanctum')->group(function () {
 
     // 1. لوحة التحكم (الإحصائيات)
-    Route::get('dashboard', [DashboardController::class, 'index']);
+    Route::get('dashboard', [ReportController::class, 'dashboard']);
 
     // 2. إدارة النسخ الاحتياطي
     Route::prefix('backups')->name('backups.')->group(function () {
@@ -104,8 +98,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // ---------------------------------------------------------------------
 
     // مسارات التقارير اللحظية (تمت إضافتها هنا)
-    Route::get('reports/warehouses', [StockReportController::class, 'warehouses'])->name('reports.warehouses');
-    Route::get('reports/entities', [StockReportController::class, 'entities'])->name('reports.entities');
+    // مسارات التقارير الديناميكية الجديدة
+    Route::prefix('reports')->name('reports.')->group(function () {
+        Route::get('/inventory', [ReportController::class, 'inventoryReport'])->name('inventory');
+        Route::get('/distributions', [ReportController::class, 'distributionsReport'])->name('distributions');
+    });
 
     Route::apiResource('inventory-movements', InventoryMovementController::class)->only(['index', 'show']);
     Route::apiResource('entity-stocks', EntityStockController::class)->only(['index', 'show']);
