@@ -120,9 +120,19 @@ class BeneficiaryController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Beneficiary $beneficiary): Response
+  /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(Beneficiary $beneficiary): \Illuminate\Http\JsonResponse|\Illuminate\Http\Response
     {
         $this->authorize('delete', $beneficiary);
+
+        // التحقق من وجود توزيعات مرتبطة بالمستفيد لمنع الحذف
+        if ($beneficiary->distributions()->exists()) {
+            return response()->json([
+                'message' => 'لا يمكن حذف هذا المستفيد لوجود عمليات توزيع مسجلة باسمه.'
+            ], 422);
+        }
 
         $beneficiary->delete();
 
