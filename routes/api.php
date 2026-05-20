@@ -84,7 +84,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('distributions/deliveries/{distribution}/toggle', [DistributionDeliveryController::class, 'toggleStatus'])->name('distributions.deliveries.toggle');
     // --- مسارات الـ Resources الأساسية للجهات والأفراد ---
     Route::apiResource('allocations', AllocationController::class)->except(['destroy']);
-    Route::apiResource('distributions', DistributionController::class)->except(['destroy']);
+    Route::apiResource('distributions', DistributionController::class);
 
     // ---------------------------------------------------------------------
     // --- 10. نظام الأقساط والعقود ---

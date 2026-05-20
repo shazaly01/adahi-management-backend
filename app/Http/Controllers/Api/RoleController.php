@@ -88,68 +88,88 @@ class RoleController extends Controller
      * Get all available permissions.
      * هذه الدالة لا يتم حمايتها بـ authorizeResource، لذا نضيف الصلاحية يدويًا
      */
-   public function getAllPermissions()
-    {
-        $this->authorize('viewAny', Role::class);
+ public function getAllPermissions()
+{
+    $this->authorize('viewAny', Role::class);
 
-        // 1. قاموس الترجمة
-        $groupTranslations = [
-            'dashboard' => 'لوحة التحكم',
-            'user' => 'المستخدمون',
-            'role' => 'الأدوار',
-            'company' => 'الشركات',
-            'setting' => 'الإعدادات',
-            // --- الإضافات الجديدة ---
-            'project' => 'المشاريع',
-            'payment' => 'المدفوعات',
-            'document' => 'المستندات',
-            'backup' => 'النسخ الاحتياطي',
-            'owner' => 'الجهه المالكة',
-        ];
+    // 1. قاموس ترجمة المجموعات بناءً على الـ Seeder الفعلي
+    $groupTranslations = [
+        'dashboard'           => 'لوحة التحكم',
+        'user'                => 'المستخدمون',
+        'role'                => 'الأدوار والصلاحيات',
+        'area'                => 'المناطق الجغرافية',
+        'message'             => 'الرسائل النصية SMS',
+        'backup'              => 'النسخ الاحتياطي',
+        'setting'             => 'الإعدادات العامة',
+        'distribution_entity' => 'جهات التوزيع',
+        'supplier'            => 'الموردون',
+        'warehouse'           => 'المخازن المستودعات',
+        'beneficiary'         => 'المستفيدون',
+        'sacrifice_type'      => 'أنواع الأضاحي',
+        'supply'              => 'عمليات التوريد والاستلام',
+        'allocation'          => 'العهَد وتخصيص الجهات',
+        'distribution'        => 'عمليات التوزيع للمستفيدين',
+        'installment'         => 'إدارة وجباية الأقساط',
+        'inventory'           => 'المخزون والأرصدة',
+        'report'              => 'التقارير والإحصائيات',
+        'distribute'          => 'شاشات الصرف المخصصة',
+        'price'               => 'صلاحيات الأسعار',
+    ];
 
-        $actionTranslations = [
-            'view' => 'عرض', 'create' => 'إنشاء', 'update' => 'تعديل', 'delete' => 'حذف',
-        ];
+    // 2. قاموس ترجمة كافة الإجراءات الأساسية والمخصصة الموجودة بالـ Seeder
+    $actionTranslations = [
+        'view'         => 'عرض',
+        'create'       => 'إنشاء / إضافة',
+        'update'       => 'تعديل',
+        'delete'       => 'حذف كلي',
+        'download'     => 'تحميل ملف',
+        'deliver'      => 'تأكيد وتسليم الإيصالات',
+        'collect'      => 'تحصيل وجباية الأقساط',
+        'free'         => 'صرف مجاني (معفى)',
+        'cash'         => 'صرف نقدي (كاش)',
+        'installments' => 'صرف بالتقسيط',
+        'edit'         => 'تعديل السعر المباشر',
+    ];
 
-        // 2. جلب كل الصلاحيات وتجميعها حسب المجموعة
-        $permissions = Permission::where('guard_name', 'api')->get()->groupBy(function ($permission) {
-            return explode('.', $permission->name)[0];
-        });
+    // 3. جلب كل الصلاحيات وتجميعها حسب المجموعة الأولى قبل النقطة
+    $permissions = Permission::where('guard_name', 'api')->get()->groupBy(function ($permission) {
+        return explode('.', $permission->name)[0];
+    });
 
-        // 3. بناء هيكل المجموعات (groups)
-        $structuredGroups = [];
-        foreach ($permissions as $groupKey => $permissionGroup) {
-            $groupPermissions = [];
-            foreach ($permissionGroup as $p) {
-                $actionKey = explode('.', $p->name)[1];
-                // تأكد من أن الإجراء موجود في قاموس الترجمة قبل إضافته
-                if (array_key_exists($actionKey, $actionTranslations)) {
-                    $groupPermissions[] = [
-                        'id' => $p->id,
-                        'action' => $actionKey,
-                    ];
-                }
-            }
+    // 4. بناء هيكل المجموعات (groups)
+    $structuredGroups = [];
+    foreach ($permissions as $groupKey => $permissionGroup) {
+        $groupPermissions = [];
+        foreach ($permissionGroup as $p) {
+            $exploded = explode('.', $p->name);
+            $actionKey = $exploded[1] ?? null;
 
-            // أضف المجموعة فقط إذا كانت تحتوي على صلاحيات
-            if (!empty($groupPermissions)) {
-                $structuredGroups[] = [
-                    'key' => $groupKey,
-                    'display_name' => $groupTranslations[$groupKey] ?? $groupKey,
-                    'permissions' => $groupPermissions,
+            if ($actionKey && array_key_exists($actionKey, $actionTranslations)) {
+                $groupPermissions[] = [
+                    'id'     => $p->id,
+                    'action' => $actionKey,
                 ];
             }
         }
 
-        // 4. بناء هيكل الإجراءات (actions)
-        $allActions = collect($actionTranslations)->map(function ($displayName, $key) {
-            return ['key' => $key, 'display_name' => $displayName];
-        })->values();
-
-        // 5. إرجاع الاستجابة النهائية
-        return response()->json([
-            'groups' => $structuredGroups,
-            'actions' => $allActions,
-        ]);
+        if (!empty($groupPermissions)) {
+            $structuredGroups[] = [
+                'key'          => $groupKey,
+                'display_name' => $groupTranslations[$groupKey] ?? $groupKey,
+                'permissions'  => $groupPermissions,
+            ];
+        }
     }
+
+    // 5. بناء هيكل الإجراءات العام (actions) لإرساله للواجهة الأمامية
+    $allActions = collect($actionTranslations)->map(function ($displayName, $key) {
+        return ['key' => $key, 'display_name' => $displayName];
+    })->values();
+
+    // 6. إرجاع الاستجابة النهائية المهيكلة
+    return response()->json([
+        'groups'  => $structuredGroups,
+        'actions' => $allActions,
+    ]);
+}
 }
