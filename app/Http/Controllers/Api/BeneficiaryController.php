@@ -16,19 +16,30 @@ class BeneficiaryController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): AnonymousResourceCollection
+  public function index(Request $request): AnonymousResourceCollection
     {
         $this->authorize('viewAny', Beneficiary::class);
 
         $user = auth()->user();
         $query = Beneficiary::with('user')->latest();
 
+        // تطبيق الفلترة والبحث إذا تم تمرير نص
+        if ($request->has('search') && !empty($request->query('search'))) {
+            $search = $request->query('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%")
+                  ->orWhere('national_id', 'like', "%{$search}%");
+            });
+        }
+
         // تطبيق العزل المناطقي: إذا كان المستخدم موزعاً، يرى مستفيديه فقط
         if ($user->hasRole('Distributor')) {
             $query->where('user_id', $user->id);
         }
 
-        $beneficiaries = $query->get();
+        // استخدام الترقيم المتوافق مع واجهة Vue الأمامية (مثلاً 10 سجلات في الصفحة)
+        $beneficiaries = $query->paginate($request->query('per_page', 10));
 
         return BeneficiaryResource::collection($beneficiaries);
     }

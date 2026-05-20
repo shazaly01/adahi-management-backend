@@ -243,4 +243,112 @@ class ReportController extends Controller
             ]
         ]);
     }
+
+
+
+
+
+    /**
+     * 4. تقرير أرصدة المخازن الرئيسية اللحظي (On-the-fly)
+     */
+    public function warehousesReport(\Illuminate\Http\Request $request): \Illuminate\Http\JsonResponse
+    {
+        $balances = \App\Models\InventoryMovement::select(
+            'warehouse_id',
+            'sacrifice_type_id',
+            \Illuminate\Support\Facades\DB::raw("SUM(CASE WHEN movement_type = 'in' THEN quantity ELSE 0 END) as total_in"),
+            \Illuminate\Support\Facades\DB::raw("SUM(CASE WHEN movement_type = 'out' THEN quantity ELSE 0 END) as total_out")
+        )
+        ->whereNull('distribution_entity_id')
+        ->whereNotNull('warehouse_id')
+        ->groupBy('warehouse_id', 'sacrifice_type_id')
+        ->with(['warehouse', 'sacrificeType'])
+        ->get();
+
+        $report = [];
+
+        foreach ($balances as $balance) {
+            $warehouseId = $balance->warehouse_id;
+            $warehouseName = $balance->warehouse->name ?? 'مخزن غير محدد';
+            $sacrificeName = $balance->sacrificeType->name ?? 'غير محدد';
+            $currentBalance = $balance->total_in - $balance->total_out;
+
+            if (!isset($report[$warehouseId])) {
+                $report[$warehouseId] = [
+                    'warehouse_id'   => $warehouseId,
+                    'warehouse_name' => $warehouseName,
+                    'stocks'         => []
+                ];
+            }
+
+            $report[$warehouseId]['stocks'][] = [
+                'sacrifice_type_id'   => $balance->sacrifice_type_id,
+                'sacrifice_type_name' => $sacrificeName,
+                'total_in'            => (int) $balance->total_in,
+                'total_out'           => (int) $balance->total_out,
+                'current_balance'     => (int) $currentBalance,
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم جلب أرصدة المخازن بنجاح',
+            'data'    => array_values($report)
+        ]);
+    }
+
+    /**
+     * 5. تقرير أرصدة جهات التوزيع (العهد الحالية والمنصرف)
+     */
+    public function entitiesReport(\Illuminate\Http\Request $request): \Illuminate\Http\JsonResponse
+    {
+        $currentStocks = \App\Models\EntityStock::with(['distributionEntity', 'sacrificeType'])->get();
+
+        $distributed = \App\Models\InventoryMovement::select(
+            'distribution_entity_id',
+            'sacrifice_type_id',
+            \Illuminate\Support\Facades\DB::raw("SUM(quantity) as total_distributed")
+        )
+        ->whereNotNull('distribution_entity_id')
+        ->where('movement_type', 'out')
+        ->groupBy('distribution_entity_id', 'sacrifice_type_id')
+        ->get()
+        ->keyBy(function($item) {
+            return $item->distribution_entity_id . '_' . $item->sacrifice_type_id;
+        });
+
+        $report = [];
+
+        foreach ($currentStocks as $stock) {
+            $entityId = $stock->distribution_entity_id;
+            $entityName = $stock->distributionEntity->name ?? 'جهة غير محددة';
+            $sacrificeTypeId = $stock->sacrifice_type_id;
+            $sacrificeName = $stock->sacrificeType->name ?? 'غير محدد';
+
+            $key = $entityId . '_' . $sacrificeTypeId;
+            $totalDistributed = isset($distributed[$key]) ? (int) $distributed[$key]->total_distributed : 0;
+
+            if (!isset($report[$entityId])) {
+                $report[$entityId] = [
+                    'distribution_entity_id'   => $entityId,
+                    'distribution_entity_name' => $entityName,
+                    'stocks'                   => []
+                ];
+            }
+
+            $report[$entityId]['stocks'][] = [
+                'sacrifice_type_id'   => $sacrificeTypeId,
+                'sacrifice_type_name' => $sacrificeName,
+                'current_custody'     => (int) $stock->quantity,
+                'total_distributed'   => $totalDistributed,
+                'total_received'      => (int) $stock->quantity + $totalDistributed
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم جلب تقرير عهد جهات التوزيع بنجاح',
+            'data'    => array_values($report)
+        ]);
+    }
 }
